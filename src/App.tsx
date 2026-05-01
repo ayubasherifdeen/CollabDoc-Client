@@ -1,7 +1,6 @@
 
 import LandingPage from "./app/LandingPage";
 import { Route, Routes, Navigate } from "react-router-dom";
-import TextEditor from "./components/TextEditor";
 import EditorPage from "./components/EditorPage";
 
 

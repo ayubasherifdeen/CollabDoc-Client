@@ -6,13 +6,7 @@ import Toolbar from "../components/Toolbar";
 import TextEditor from "../components/TextEditor";
 import UserPanel from "../components/UserPanel";
 
-import {
-  Document as DocxDocument,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-} from "docx";
-import { saveAs } from "file-saver";
+
 
 type Identity = { name: string; color: string };
 type Props = { docId: string; identity: Identity };
