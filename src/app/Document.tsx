@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { io } from "socket.io-client";
 import Quill, { Delta } from "quill";
-
 import Toolbar from "../components/Toolbar";
 import TextEditor from "../components/TextEditor";
 import UserPanel from "../components/UserPanel";
