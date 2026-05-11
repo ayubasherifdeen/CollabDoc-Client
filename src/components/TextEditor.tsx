@@ -22,6 +22,19 @@ const TextEditor: React.FC<Props> = ({
     const el = containerRef.current;
     if (!el || quillRef.current) return;
 
+    // Register horizontal rule blot
+const BlockEmbed = Quill.import("blots/block/embed") as any;
+class HrBlot extends BlockEmbed {
+  static blotName = "hr";
+  static tagName = "hr";
+  static create() {
+    const node = super.create();
+    node.style.cssText = "border:none;border-top:2px solid #e7e5e4;margin:16px 0;";
+    return node;
+  }
+}
+Quill.register(HrBlot, true);
+
     const editorDiv = document.createElement("div")
     el.appendChild(editorDiv);
 
