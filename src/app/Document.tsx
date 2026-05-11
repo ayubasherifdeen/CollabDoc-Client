@@ -5,6 +5,11 @@ import Toolbar from "../components/Toolbar";
 import TextEditor from "../components/TextEditor";
 import UserPanel from "../components/UserPanel";
 
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { Document as DocxDoc, Paragraph, TextRun, HeadingLevel, Packer, AlignmentType } from "docx";
+import { saveAs } from "file-saver";
+
 
 // Quill font size — register custom sizes
 const SizeStyle = Quill.import("attributors/style/size") as any;
@@ -58,55 +63,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const exportPDF = () => {
-    const editorContent = quillRef.current?.root.innerHTML;
-    if (!editorContent) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>${docTitle}</title>
-        <style>
-          body {
-            font-family: 'Georgia', serif;
-            font-size: 13pt;
-            line-height: 1.8;
-            color: #1c1917;
-            max-width: 680px;
-            margin: 40px auto;
-            padding: 0 40px;
-          }
-          h1 { font-size: 22pt; margin-bottom: 12px; }
-          h2 { font-size: 16pt; margin-bottom: 8px; }
-          p  { margin-bottom: 6px; }
-          ul, ol { padding-left: 24px; }
-          blockquote {
-            border-left: 3px solid #ccc;
-            padding-left: 16px;
-            color: #666;
-            font-style: italic;
-          }
-          @media print {
-            body { margin: 0; }
-          }
-        </style>
-      </head>
-      <body>
-        <h1>${docTitle}</h1>
-        ${editorContent}
-      </body>
-    </html>
-  `);
-
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-  };
+  
 
   const triggerSave = useCallback(() => {
     setSaveStatus("saving");
@@ -278,6 +235,151 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
     setTimeout(() => setShareCopied(false), 2000);
   };
 
+  const exportPDF = async () => {
+  const editor = quillRef.current?.root;
+  if (!editor) return;
+
+
+  // take a screenshot and scale to 2
+  const canvas = await html2canvas(editor, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+  });
+
+  // Convert the canvas snapshot to a base64 PNG
+  const imgData = canvas.toDataURL("image/png");
+
+  // jsPDF creates an A4 page in portrait
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth  = pdf.internal.pageSize.getWidth();  // 210mm
+  const pageHeight = pdf.internal.pageSize.getHeight(); // 297mm
+
+  // Scale the image to fit the page width with 10mm margins each side
+  const imgWidth  = pageWidth - 20;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  let y = 10; // start 10mm from top
+  let remaining = imgHeight;
+
+  // Place the image — if content is taller than one page,
+  // keep adding pages and shifting the image up each time
+  pdf.addImage(imgData, "PNG", 10, y, imgWidth, imgHeight);
+  remaining -= pageHeight - 10;
+
+  while (remaining > 0) {
+    pdf.addPage();
+    y = -(imgHeight - remaining) - 10;
+    pdf.addImage(imgData, "PNG", 10, y, imgWidth, imgHeight);
+    remaining -= pageHeight;
+  }
+
+  // Triggers a download in the browser — no server needed
+  pdf.save(`${docTitle}.pdf`);
+};
+
+
+const exportDOCX = async () => {
+  const quill = quillRef.current;
+  if (!quill) return;
+
+  const delta = quill.getContents();
+  const paragraphs: Paragraph[] = [];
+
+  let runs: TextRun[] = [];
+
+
+  const flushParagraph = (blockAttrs: any = {}) => {
+    // Determine heading level from block attributes
+    const heading =
+      blockAttrs.header === 1 ? HeadingLevel.HEADING_1 :
+      blockAttrs.header === 2 ? HeadingLevel.HEADING_2 :
+      undefined;
+
+    // Map Quill alignment strings to Word's AlignmentType enum
+    const alignment =
+      blockAttrs.align === "center"  ? AlignmentType.CENTER :
+      blockAttrs.align === "right"   ? AlignmentType.RIGHT  :
+      blockAttrs.align === "justify" ? AlignmentType.BOTH   :
+      AlignmentType.LEFT;
+
+    // Indent — Quill uses a number (1, 2, 3...), Word uses twips (720 per level)
+    const indent = blockAttrs.indent
+      ? { left: blockAttrs.indent * 720 }
+      : undefined;
+
+    paragraphs.push(
+      new Paragraph({
+        children: runs.length ? runs : [new TextRun("")],
+        heading,
+        alignment,
+        indent,
+        spacing: { after: 120 },
+      })
+    );
+
+    runs = []; // reset for next paragraph
+  };
+
+  delta.ops?.forEach((op: any) => {
+    if (typeof op.insert !== "string") return;
+
+    // Split on newlines — each \n ends a paragraph
+    const lines = op.insert.split("\n");
+
+    lines.forEach((line: string, i: number) => {
+      if (line.length > 0) {
+        // Build a TextRun with character-level formatting
+        runs.push(
+          new TextRun({
+            text: line,
+            bold:      !!op.attributes?.bold,
+            italics:   !!op.attributes?.italic,
+            underline: op.attributes?.underline ? {} : undefined,
+            // Convert px string to half-points (Word's unit)
+            // 1pt = 2 half-points, 1px ≈ 0.75pt → 1px ≈ 1.5 half-points
+            size: op.attributes?.size
+              ? Math.round(parseFloat(op.attributes.size) * 1.5)
+              : 24, // 24 half-points = 12pt default
+            color: op.attributes?.color
+              ? op.attributes.color.replace("#", "") // Word wants hex without #
+              : undefined,
+            highlight: op.attributes?.background
+              ? "yellow" // Word only supports named highlight colours
+              : undefined,
+            font: op.attributes?.font || undefined,
+          })
+        );
+      }
+
+      if (i < lines.length - 1) {
+        flushParagraph(op.attributes);
+      }
+    });
+  });
+
+  // Flush any remaining runs as a final paragraph
+  flushParagraph();
+
+  // Wrap everything in a Document with one Section
+  const doc = new DocxDoc({
+    sections: [{
+      children: [
+        // Document title at the top
+        new Paragraph({
+          children: [new TextRun({ text: docTitle, bold: true, size: 36 })],
+          spacing: { after: 300 },
+        }),
+        ...paragraphs,
+      ],
+    }],
+  });
+
+  // Packer.toBlob() serializes the Document object into a real .docx binary
+  // saveAs() from file-saver triggers the browser's download dialog
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `${docTitle}.docx`);
+};
   return (
     <div className="w-full max-w-[860px] flex flex-col">
  
@@ -334,6 +436,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
         </div>
  
         <button
+        
           onClick={handleShare}
           className={`flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white border-none cursor-pointer transition-all duration-150 hover:-translate-y-0.5 ${
             shareCopied
@@ -359,6 +462,32 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
             </>
           )}
         </button>
+        {/* Export buttons */}
+<div className="flex items-center gap-2">
+  <button
+    onClick={exportPDF}
+    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 transition-all duration-150 shadow-sm"
+  >
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+      <polyline points="14,2 14,8 20,8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+    </svg>
+    PDF
+  </button>
+
+  <button
+    onClick={exportDOCX}
+    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 transition-all duration-150 shadow-sm"
+  >
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+      <polyline points="14,2 14,8 20,8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+    </svg>
+    Word
+  </button>
+</div>
       </div>
  
       {/* ── Presence ── */}
