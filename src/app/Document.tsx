@@ -6,6 +6,22 @@ import TextEditor from "../components/TextEditor";
 import UserPanel from "../components/UserPanel";
 
 
+// Quill font size — register custom sizes
+const SizeStyle = Quill.import("attributors/style/size") as any;
+SizeStyle.whitelist = ["8px","9","10px","11px", "12px","16px", "18px", "24px","28px", "36px"];
+Quill.register(SizeStyle, true);
+ 
+// Quill font family — register custom fonts
+const FontStyle = Quill.import("attributors/style/font") as any;
+FontStyle.whitelist = ["DM Sans", "Playfair Display", "monospace","arial","Courier New", "Georgia", "Times New Roman"];
+Quill.register(FontStyle, true);
+
+// Align
+const AlignStyle = Quill.import("attributors/style/align") as any;
+AlignStyle.whitelist = ["left", "center", "right", "justify"];
+Quill.register(AlignStyle, true);
+
+
 
 type Identity = { name: string; color: string };
 type Props = { docId: string; identity: Identity };
@@ -22,11 +38,22 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
   const [docTitle, setDocTitle] = useState("Untitled Document");
   const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [activeFormats, setActiveFormats] = useState({
+  const [activeFormats, setActiveFormats] =  useState<{
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    fontSize?: string;
+    fontFamily?: string;
+    color?: string;
+  }>({
     bold: false,
     italic: false,
     underline: false,
+    fontSize: "12px",
+    fontFamily: "Times New Roman",
+    color: "#1c1917",
   });
+
   const [shareCopied, setShareCopied] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,10 +219,53 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
     quill.format(format, current[format] === value ? false : value, "user");
   }, []);
 
+  //indentation
+  const execIndent = useCallback((direction: "increase" | "decrease") => {
+  const quill = quillRef.current;
+  if (!quill) return;
+  const range = quill.getSelection();
+  if (!range) return;
+  const current = quill.getFormat(range);
+  const indent = parseInt(current.indent as string || "0", 10);
+  const next = direction === "increase" ? indent + 1 : Math.max(0, indent - 1);
+  quill.format("indent", next || false, "user");
+}, []);
+
   const execHistory = useCallback((action: "undo" | "redo") => {
     const quill = quillRef.current;
     if (!quill) return;
     (quill as any).history?.[action]?.();
+  }, []);
+
+  const execFontSize = useCallback((size: string) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    quill.format("size", size, "user");
+    setActiveFormats((prev) => ({ ...prev, fontSize: size }));
+  }, []);
+ 
+  const execFontFamily = useCallback((font: string) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    quill.format("font", font, "user");
+    setActiveFormats((prev) => ({ ...prev, fontFamily: font }));
+  }, []);
+ 
+  const execTextColor = useCallback((color: string) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    quill.format("color", color, "user");
+    setActiveFormats((prev) => ({ ...prev, color }));
+  }, []);
+ 
+  const execHorizontalRule = useCallback(() => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    quill.insertText(range.index, "\n", "user");
+    quill.insertEmbed(range.index + 1, "hr", true, "user");
+    quill.insertText(range.index + 2, "\n", "user");
+    quill.setSelection(range.index + 3, 0);
   }, []);
 
   useEffect(() => {
@@ -210,6 +280,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
 
   return (
     <div className="w-full max-w-[860px] flex flex-col">
+ 
       {/* ── Header ── */}
       <div className="flex items-end justify-between mb-5 flex-wrap gap-3">
         <div className="flex flex-col gap-1 min-w-0">
@@ -231,33 +302,19 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
               style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
             >
               {docTitle}
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="text-stone-300 flex-shrink-0"
-              >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-stone-300 flex-shrink-0">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
             </h1>
           )}
-
+ 
           <div className="flex items-center gap-2.5 flex-wrap text-[12px] text-stone-400">
             <span>doc/{docId}</span>
             <span className="text-stone-200">·</span>
             {saveStatus === "saving" && (
               <span className="flex items-center gap-1 text-orange-500 font-medium">
-                <svg
-                  className="animate-spin w-3 h-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
+                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" opacity="0.2" />
                   <path d="M21 12a9 9 0 00-9-9" />
                 </svg>
@@ -266,14 +323,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
             )}
             {saveStatus === "saved" && (
               <span className="flex items-center gap-1 text-emerald-500 font-medium">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
                 Saved
@@ -282,46 +332,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
             {saveStatus === "idle" && <span>All changes saved</span>}
           </div>
         </div>
-        {/* Export buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportPDF}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 hover:border-stone-300 transition-all duration-150 shadow-sm"
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-              <polyline points="14,2 14,8 20,8" />
-              <path d="M9 13h6M9 17h4" />
-            </svg>
-            PDF
-          </button>
-
-          <button className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 hover:border-stone-300 transition-all duration-150 shadow-sm">
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-              <polyline points="14,2 14,8 20,8" />
-              <path d="M12 18v-6M9 15l3 3 3-3" />
-            </svg>
-            Word
-          </button>
-        </div>
-
+ 
         <button
           onClick={handleShare}
           className={`flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white border-none cursor-pointer transition-all duration-150 hover:-translate-y-0.5 ${
@@ -332,30 +343,14 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
         >
           {shareCopied ? (
             <>
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
               Copied!
             </>
           ) : (
             <>
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
                 <polyline points="16 6 12 2 8 6" />
                 <line x1="12" y1="2" x2="12" y2="15" />
@@ -365,10 +360,10 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
           )}
         </button>
       </div>
-
+ 
       {/* ── Presence ── */}
       <UserPanel users={users} />
-
+ 
       {/* ── Toolbar ── */}
       <Toolbar
         onBold={() => execFormat("bold")}
@@ -380,10 +375,19 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
         onRedo={() => execHistory("redo")}
         onAlignLeft={() => execBlock("align", false)}
         onAlignCenter={() => execBlock("align", "center")}
+        onAlignRight={() => execBlock("align", "right")}
+onJustify={() => execBlock("align", "justify")}
+onIndentIncrease={() => execIndent("increase")}
+onIndentDecrease={() => execIndent("decrease")}
         onBullet={() => execBlock("list", "bullet")}
+        onOrdered={() => execBlock("list", "ordered")}
+        onHorizontalRule={execHorizontalRule}
+        onFontSize={execFontSize}
+        onFontFamily={execFontFamily}
+        onTextColor={execTextColor}
         activeFormats={activeFormats}
       />
-
+ 
       {/* ── Editor ── */}
       <TextEditor onReady={handleQuillReady} cursors={cursors} />
     </div>
