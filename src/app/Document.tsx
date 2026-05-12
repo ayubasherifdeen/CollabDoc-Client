@@ -276,6 +276,7 @@ const Document: React.FC<Props> = ({ docId, identity }) => {
 
   // Triggers a download in the browser — no server needed
   pdf.save(`${docTitle}.pdf`);
+  window.alert("Exporting document to pdf")
 };
 
 
@@ -375,6 +376,7 @@ const exportDOCX = async () => {
     }],
   });
 
+  window.alert("Exporting document to word")
   // Packer.toBlob() serializes the Document object into a real .docx binary
   // saveAs() from file-saver triggers the browser's download dialog
   const blob = await Packer.toBlob(doc);
