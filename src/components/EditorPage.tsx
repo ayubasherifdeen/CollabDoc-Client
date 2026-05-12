@@ -10,14 +10,18 @@ export default function EditorPage() {
   const { docId } = useParams<{ docId: string }>();
   const navigate = useNavigate();
 
-  const [identity, setIdentity] = useState<Identity | null>(() => {
+  const getSaved = (): Identity | null => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  });
+    } catch {
+      return null;
+    }
+  };
 
+  const [identity, setIdentity] = useState<Identity | null>(null);
   const [showModal, setShowModal] = useState(!identity);
+  const savedIdentity = getSaved();
 
   if (!docId) return <Navigate to="/" replace />;
 
@@ -29,27 +33,45 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 antialiased" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
+    <div
+      className="min-h-screen bg-stone-50 antialiased"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    >
       {showModal && (
         <JoinModal
           onJoin={handleJoin}
           onCancel={() => navigate("/")}
+          defaultName={savedIdentity?.name}
+          defaultColor={savedIdentity?.color}
         />
       )}
 
       {/* Nav */}
       <nav className="sticky top-0 z-40 bg-white border-b border-stone-200 shadow-sm h-[52px] flex items-center px-6 gap-4">
-        <a href="/" className="flex items-center gap-2.5 flex-shrink-0 no-underline">
+        <a
+          href="/"
+          className="flex items-center gap-2.5 flex-shrink-0 no-underline"
+        >
           <div className="w-[28px] h-[28px] bg-orange-600 rounded-[7px] flex items-center justify-center">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
               <polyline points="14,2 14,8 20,8" />
               <line x1="16" y1="13" x2="8" y2="13" />
               <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
           </div>
-          <span className="text-[17px] font-semibold text-stone-800 tracking-tight" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+          <span
+            className="text-[17px] font-semibold text-stone-800 tracking-tight"
+            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+          >
             Collab<span className="text-orange-600">Doc</span>
           </span>
         </a>
@@ -64,7 +86,9 @@ export default function EditorPage() {
             >
               {identity.name.slice(0, 2).toUpperCase()}
             </div>
-            <span className="text-[13px] font-medium text-stone-600">{identity.name}</span>
+            <span className="text-[13px] font-medium text-stone-600">
+              {identity.name}
+            </span>
             <button
               onClick={() => setShowModal(true)}
               className="ml-1 text-[11px] text-stone-400 hover:text-stone-600 transition-colors"
