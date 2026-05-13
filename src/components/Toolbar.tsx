@@ -47,11 +47,11 @@ const FONT_SIZES = [
 ];
 
 const FONT_FAMILIES = [
+  { label: "Times New Roman",  value: "Times New Roman" },
   { label: "DM Sans",          value: "DM Sans" },
   { label: "Playfair Display", value: "Playfair Display" },
   { label: "Georgia",          value: "Georgia" },
   { label: "Arial",            value: "Arial" },
-  { label: "Times New Roman",  value: "Times New Roman" },
   { label: "Courier New",      value: "Courier New" },
   { label: "Monospace",        value: "monospace" },
 ];
